@@ -1,0 +1,369 @@
+:root {
+  --sky: #f1e1cd;
+  --paper: #f4e8d8;
+  --ink: #2a231f;
+  --ink-muted: #64564c;
+  --accent: #9a4a3a;
+  --cream: #f7efe3;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* After dusk the sky goes dark, so the text turns light. Set by main.js. */
+:root[data-light='dark'] {
+  --sky: #15131f;
+  --paper: #1b1924;
+  --ink: #f2ebe1;
+  --ink-muted: #b4aabb;
+  --accent: #f2b893;
+  --cream: #f2ebe1;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+}
+
+body {
+  min-height: 100svh;
+  background: var(--sky);
+  color: var(--ink);
+  font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Once the first light is set, later changes (dusk, dawn) fade. */
+.settled body {
+  transition: color 1200ms var(--ease), background-color 1200ms var(--ease);
+}
+
+::selection {
+  background: #efaa8e;
+  color: #2a231f;
+}
+
+h1,
+h2,
+p,
+ul {
+  margin: 0;
+  padding: 0;
+}
+
+ul {
+  list-style: none;
+}
+
+h1,
+h2 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+/* Text styles */
+.title-1 { font-size: 1.25rem; line-height: 1.75rem; font-weight: 500; }
+.title-4 { font-size: 0.875rem; line-height: 1.25rem; font-weight: 500; }
+.body-3 { font-size: 1rem; line-height: 1.5rem; font-weight: 400; }
+.body-6 { font-size: 0.875rem; line-height: 1.25rem; font-weight: 400; }
+.caption-4 { font-size: 0.75rem; line-height: 1rem; font-weight: 500; }
+.caption-5 { font-size: 0.75rem; line-height: 1rem; font-weight: 400; }
+
+/* Scene */
+.scene {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.scene canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#landscape {
+  opacity: 0;
+  transition: opacity 1400ms var(--ease);
+}
+
+#landscape.ready {
+  opacity: 1;
+}
+
+/* Layout */
+.page {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 400px) max-content;
+  grid-template-areas: 'intro notes';
+  column-gap: 80px;
+  align-items: start;
+  padding: 40px 48px;
+}
+
+.lead,
+.lists {
+  display: contents;
+}
+
+.intro { grid-area: intro; }
+.notes { grid-area: notes; }
+
+.bio {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.col {
+  padding-top: 4px;
+}
+
+.col-h {
+  margin-bottom: 12px;
+}
+
+.col-h-next {
+  margin-top: 32px;
+}
+
+.col-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: inherit;
+  text-decoration: none;
+  transition: color 300ms var(--ease);
+}
+
+.col-link svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  transition: transform 300ms var(--ease);
+}
+
+.col-link:hover {
+  color: var(--accent);
+}
+
+.col-link:hover svg {
+  transform: translate(2px, -2px);
+}
+
+.entries {
+  display: grid;
+  gap: 12px;
+}
+
+.entry {
+  display: grid;
+  gap: 2px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.entry-meta {
+  color: var(--ink-muted);
+}
+
+a.entry .entry-title,
+.inline {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  transition: color 300ms var(--ease), text-decoration-color 300ms var(--ease);
+}
+
+a.entry .entry-title {
+  text-decoration-color: transparent;
+}
+
+a.entry:hover .entry-title {
+  color: var(--accent);
+  text-decoration-color: currentColor;
+}
+
+.inline {
+  color: inherit;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+}
+
+.inline:hover {
+  color: var(--accent);
+  text-decoration-color: currentColor;
+}
+
+a.entry:active {
+  transform: translateY(1px);
+}
+
+/* Icon links */
+.elsewhere {
+  margin-top: 16px;
+}
+
+.icons {
+  display: flex;
+  gap: 4px;
+  margin-left: -8px;
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  color: inherit;
+  transition: color 300ms var(--ease), transform 300ms var(--ease), background-color 300ms var(--ease);
+}
+
+.icon svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
+
+.icon:hover {
+  color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.icon:active {
+  transform: translateY(0);
+}
+
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.icon:focus-visible {
+  outline-offset: 0;
+  border-radius: 8px;
+}
+
+.more-cue {
+  display: none;
+}
+
+.place {
+  position: fixed;
+  left: 48px;
+  bottom: 24px;
+  z-index: 1;
+  color: var(--cream);
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+/* Entrance */
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  animation: rise 900ms var(--ease) forwards;
+  animation-delay: calc(400ms + var(--d, 0ms));
+}
+
+.notes { --d: 120ms; }
+
+@keyframes rise {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Tablet */
+@media (max-width: 1100px) {
+  .page {
+    grid-template-columns: minmax(0, 360px) max-content;
+    column-gap: 48px;
+    padding: 32px 40px;
+  }
+}
+
+/* Phone: the first screen is the postcard, the lists follow on paper */
+@media (max-width: 720px) {
+  .page {
+    display: block;
+    padding: 0;
+  }
+
+  .lead {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    min-height: 100svh;
+    padding: 24px 24px 32px;
+  }
+
+  .more-cue {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    align-self: flex-start;
+    margin-top: auto;
+    color: var(--cream);
+    text-decoration: none;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .more-cue::after {
+    content: '↓';
+    transition: transform 300ms var(--ease);
+  }
+
+  .more-cue:active::after {
+    transform: translateY(2px);
+  }
+
+  .lists {
+    display: block;
+    position: relative;
+    background: var(--paper);
+    border-radius: 24px 24px 0 0;
+    padding: 40px 24px 64px;
+  }
+
+  .settled .lists {
+    transition: background-color 1200ms var(--ease);
+  }
+
+  .place {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    transform: none;
+    animation-name: fade;
+    animation-duration: 600ms;
+  }
+
+  @keyframes fade {
+    to {
+      opacity: 1;
+    }
+  }
+
+  #landscape {
+    transition-duration: 300ms;
+  }
+}
