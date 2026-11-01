@@ -41,7 +41,7 @@
   let clock = 40;
 
   // The middle of the massif's high crest, kept clear of the text.
-  const SUMMIT = 0.08;
+  const SUMMIT = 0.15;
   const NEAR_Y = 0.846;
   const LAKE_NEAR = 0.75;
 
