@@ -199,6 +199,23 @@
     pointer.active = false;
   });
 
+  // The place name opens the photo over the scene; a click anywhere but the
+  // credit, or Escape, closes it. Without dialog support the link opens the
+  // image itself.
+  const place = document.querySelector('.place');
+  const photo = document.getElementById('photo');
+  if (place && photo && photo.showModal) {
+    place.addEventListener('click', (e) => {
+      e.preventDefault();
+      photo.showModal();
+      // Hold focus on the photo, not on the credit link.
+      photo.focus();
+    });
+    photo.addEventListener('click', (e) => {
+      if (!e.target.closest('a')) photo.close();
+    });
+  }
+
   let resizeTimer = 0;
   window.addEventListener('resize', () => {
     cancelAnimationFrame(resizeTimer);
