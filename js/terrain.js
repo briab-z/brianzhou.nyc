@@ -369,15 +369,23 @@
 
   // Low wooded hills in front of the far ranges hide their feet: under the
   // Sella, and below Sassopiatto's slab as it runs down to the Alpe. Each is
-  // [s, height, half-width]; the forest along the massif's foot follows them.
+  // [s, height, half-width west, half-width east]: a steeper side and a
+  // longer one, so none stands up as a symmetric mound. Where two meet they
+  // merge in a saddle, not a notch. The forest along the massif's foot
+  // covers them (see footBelt in landscape.js).
   const FOOTHILLS = [
-    [-1.15, 0.045, 0.1], [-0.9, 0.035, 0.09], [-0.66, 0.045, 0.1], [-0.45, 0.03, 0.08], [-0.65, 0.025, 0.3],
-    [0.62, 0.05, 0.05], [0.72, 0.075, 0.07], [0.88, 0.035, 0.07], [1.03, 0.03, 0.1],
+    [-1.15, 0.045, 0.1, 0.08], [-0.9, 0.035, 0.07, 0.11], [-0.66, 0.045, 0.12, 0.08], [-0.45, 0.03, 0.06, 0.1], [-0.65, 0.025, 0.3, 0.3],
+    [0.6, 0.045, 0.045, 0.09], [0.74, 0.066, 0.06, 0.12], [0.9, 0.035, 0.06, 0.08], [1.03, 0.03, 0.1, 0.1],
   ];
   function plateauTop(s) {
-    let hill = 0;
-    for (const [c, h, w] of FOOTHILLS) hill = Math.max(hill, h * Math.exp(-Math.pow((s - c) / w, 2)));
-    hill *= 0.8 + 0.4 * fbm1(s * 11 + 5);
+    // A soft maximum of the hills, so the saddle between two fills out.
+    let sum = 0;
+    for (const [c, h, wl, wr] of FOOTHILLS) {
+      const x = (s - c) / (s < c ? wl : wr);
+      sum += Math.pow(h * Math.exp(-x * x), 4);
+    }
+    let hill = Math.pow(sum, 0.25);
+    hill *= 0.82 + 0.36 * fbm1(s * 11 + 5) + 0.08 * (fbm1(s * 37 + 9) - 0.5);
     return 0.621 - 0.007 * fbm1(s * 4 + 21) - 0.012 * Math.pow(fbm1(s * 1.7 + 3), 2) - hill;
   }
 
@@ -390,11 +398,12 @@
     return y + 0.01 * (fbm1(s * 9 + 33) - 0.5);
   }
 
-  // The near bank rolls in low swells, a few across the view, so it never
-  // meets the woods behind it along a level line.
+  // The near bank rises and falls a little, unevenly, so it never meets the
+  // woods behind it along a ruled line. Bigger or more regular swells read
+  // as a row of drawn humps.
   function nearTop(s) {
     return 0.846 + 0.012 * Math.sin(s * 3.1 + 0.6) + 0.012 * (fbm1(s * 6 + 70) - 0.5) - 0.022 * smooth(0.3, 1.3, s)
-      + 0.022 * (fbm1(s * 11 + 12) - 0.5) + 0.006 * Math.sin(s * 23 + 1.7);
+      + 0.008 * (fbm1(s * 2.6 + 12) - 0.5) + 0.004 * (fbm1(s * 9 + 31) - 0.5);
   }
 
   // Far and near shore of the lake at s, or [0, 0] outside it. The far shore
