@@ -269,7 +269,16 @@ a:focus-visible {
   z-index: 1;
   color: var(--cream);
   opacity: 0.8;
-  pointer-events: none;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  text-decoration-color: transparent;
+  transition: opacity 300ms var(--ease), text-decoration-color 300ms var(--ease);
+}
+
+.place:hover {
+  opacity: 1;
+  text-decoration-color: currentColor;
 }
 
 /* Entrance */

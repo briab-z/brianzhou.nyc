@@ -101,12 +101,16 @@
     [0.316, 0.204], [0.324, 0.207], [0.329, 0.209], [0.334, 0.199], [0.34, 0.203], [0.345, 0.209],
     [0.35, 0.226], [0.356, 0.238], [0.36, 0.242], [0.365, 0.24],
     [0.39, 0.219], [0.405, 0.207], [0.43, 0.188], [0.453, 0.173], [0.48, 0.156], [0.5, 0.143],
-    [0.531, 0.127], [0.563, 0.11], [0.594, 0.093], [0.626, 0.076], [0.645, 0.068],
-    [0.68, 0.062], [0.72, 0.06], [0.78, 0.055], [0.85, 0.05], [0.93, 0.052], [1.0, 0.05],
-    [1.1, 0.038], [1.3, 0.014], [1.6, 0.0],
+    [0.531, 0.127], [0.563, 0.11], [0.594, 0.093], [0.615, 0.085],
+    // The slab runs out onto a lower range, mostly grass, that carries on to
+    // the right; wooded hills in front hide the slab's foot and where the two
+    // meet.
+    [0.635, 0.083], [0.66, 0.087], [0.69, 0.084], [0.72, 0.091], [0.76, 0.1], [0.79, 0.096],
+    [0.82, 0.106], [0.86, 0.1], [0.9, 0.11], [0.93, 0.102], [0.97, 0.106], [1.02, 0.092], [1.08, 0.084],
+    [1.15, 0.07], [1.3, 0.04], [1.6, 0.0],
   ]);
   // Sassopiatto's slab: its face is a tilted sheet of rock, not a wall.
-  D.SLAB = [hx(0.36), hx(0.645)];
+  D.SLAB = [hx(0.36), hx(0.62)];
 
   function heroE(s) {
     let e = polyline(HERO_PTS, s);
@@ -123,12 +127,15 @@
     return Math.max(0, m - eFn(s));
   }
   // Foot of the walls: low under the great block, high in the couloir below
-  // the notch, and along the slab a thinning wedge above the grass.
+  // the notch, and along the slab a thinning wedge above the grass. Past the
+  // slab it rises nearly to the crest: on the grassy range beyond only bands
+  // of rock show under its crest.
   const CLIFF_PTS = traced([
     [-0.3, 0.05], [-0.16, 0.036], [-0.13, 0.026], [-0.1, 0.024], [-0.05, 0.028], [0.0, 0.034],
     [0.04, 0.042], [0.08, 0.055], [0.11, 0.07], [0.134, 0.08], [0.15, 0.06], [0.17, 0.046],
     [0.2, 0.05], [0.24, 0.04], [0.28, 0.045], [0.32, 0.052], [0.36, 0.06], [0.42, 0.066],
-    [0.5, 0.056], [0.58, 0.042], [0.63, 0.036], [0.66, 0.05], [1.6, 0.05],
+    [0.5, 0.056], [0.58, 0.042], [0.61, 0.05], [0.64, 0.076], [0.68, 0.08], [0.72, 0.082],
+    [0.76, 0.092], [0.8, 0.091], [0.86, 0.095], [0.92, 0.099], [1.0, 0.096], [1.1, 0.085], [1.6, 0.075],
   ]);
   function heroCliff(s, e) {
     const cb0 = polyline(CLIFF_PTS, s) + 0.012 * (fbm1(s * 14 + 2) - 0.5);
@@ -210,7 +217,21 @@
     }
     list = list.concat(extra);
     list.sort((a, b) => b.prom - a.prom);
-    list = list.slice(0, D.SPUR_N);
+    // Under Sassopiatto's slab the wall is a row of pillars standing up into
+    // the slab's lower edge: just under the summit at first, then lower as
+    // the slab grows deeper, until it runs out into the grass. The shader
+    // knows them as the spurs past D.SLAB[0].
+    const pillars = [];
+    const [a, b] = D.SLAB;
+    for (let k = 0, s = a + 0.004; s < a + (b - a) * 0.88; k++) {
+      const u = (s - a) / (b - a);
+      const crest = BASE.HERO - polyline(HERO_PTS, s);
+      const wallH = polyline(HERO_PTS, s) - polyline(CLIFF_PTS, s);
+      const f = 0.25 + 0.4 * smooth(0, 0.6, u) + (hash1(k * 5.3 + 1) - 0.5) * 0.22;
+      pillars.push({ s, y: crest + wallH * f, lean: 0.08 + (hash1(k * 9.1) - 0.5) * 0.1, z: 0.03 + (hash1(k * 3.7) - 0.5) * 0.016, prom: 0 });
+      s += 0.02 + 0.014 * hash1(k * 7.3 + 2);
+    }
+    list = list.slice(0, D.SPUR_N - pillars.length).concat(pillars);
     // Spurs on either side of a notch lean into it; ease them so they meet
     // no higher than the foot of the walls.
     const byS = list.slice().sort((a, b) => a.s - b.s);
@@ -239,7 +260,7 @@
     const coul = new Float32Array(D.SPUR_N).fill(-9);
     let n = 0;
     let last = -1;
-    for (let s = S0; s < D.SLAB[0] && n < D.SPUR_N; s += 0.0005) {
+    for (let s = S0; s < D.SLAB[1] && n < D.SPUR_N; s += 0.0005) {
       const y = BASE.HERO - heroCliff(s, heroE(s));
       let best = -1;
       let bz = -Infinity;
@@ -295,8 +316,11 @@
 
   // Odle style group on the left, lower towers behind the slab on the right.
   // Low towers behind the slab on the right.
+  // Behind the grassy range past Sassopiatto they fall away, so that range
+  // makes the skyline there.
+  const EAST_GAP = (c) => smooth(0.6, 0.7, c) * (1 - smooth(1.02, 1.2, c));
   const EAST = makeTowers(0.4, 1.7, 37, (c) =>
-    smooth(0.42, 0.7, c) * (1 - smooth(1.3, 1.7, c)) * (0.08 + 0.03 * Math.sin(c * 4.0)));
+    smooth(0.42, 0.7, c) * (1 - smooth(1.3, 1.7, c)) * (1 - EAST_GAP(c)) * (0.08 + 0.03 * Math.sin(c * 4.0)));
 
   // On the left, a fortress in the manner of the Sella: a long lower wall,
   // a terrace where scree and snow lie, and an upper wall set back above it
@@ -323,7 +347,7 @@
   function midfarE(s) {
     let e = 0.022 + 0.03 * fbm1(s * 2.3 + 40);
     const right = smooth(0.42, 0.68, s) * (1 - smooth(1.3, 1.65, s));
-    e += right * (0.035 + 0.02 * fbm1(s * 5 + 8));
+    e += right * (0.035 + 0.02 * fbm1(s * 5 + 8)) * (1 - 0.6 * EAST_GAP(s));
     const sella = sellaE(s);
     e = Math.max(e, 0.026 + sella, 0.03 + towersAt(EAST, s));
     // Broken, notched tops instead of smooth cones, but the Sella's rim
@@ -343,8 +367,18 @@
     return 0.02 + 0.05 * fbm1(s * 2.2 + 80) + 0.045 * Math.pow(ridged1(s * 7 + 3), 2) * (0.4 + fbm1(s * 1.1 + 5));
   }
 
+  // Low wooded hills in front of the far ranges hide their feet: under the
+  // Sella, and below Sassopiatto's slab as it runs down to the Alpe. Each is
+  // [s, height, half-width]; the forest along the massif's foot follows them.
+  const FOOTHILLS = [
+    [-1.15, 0.045, 0.1], [-0.9, 0.035, 0.09], [-0.66, 0.045, 0.1], [-0.45, 0.03, 0.08], [-0.65, 0.025, 0.3],
+    [0.62, 0.05, 0.05], [0.72, 0.075, 0.07], [0.88, 0.035, 0.07], [1.03, 0.03, 0.1],
+  ];
   function plateauTop(s) {
-    return 0.621 - 0.007 * fbm1(s * 4 + 21) - 0.012 * Math.pow(fbm1(s * 1.7 + 3), 2);
+    let hill = 0;
+    for (const [c, h, w] of FOOTHILLS) hill = Math.max(hill, h * Math.exp(-Math.pow((s - c) / w, 2)));
+    hill *= 0.8 + 0.4 * fbm1(s * 11 + 5);
+    return 0.621 - 0.007 * fbm1(s * 4 + 21) - 0.012 * Math.pow(fbm1(s * 1.7 + 3), 2) - hill;
   }
 
   function forestTop(s) {

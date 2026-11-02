@@ -367,6 +367,8 @@ float spurShadow(float s, float y, float z, int crestRow) {
   return sh;
 }
 
+vec3 meadowAlb(float s, float y, float hl);
+
 // s, y: position. top, cb, sb: crest, foot of the cliffs, foot of the scree.
 // row: the layer's relief row. freq: detail scale (higher for far layers).
 vec3 rockLayerColor(float s, float y, float top, float cb, float sb, int row, float freq) {
@@ -455,22 +457,44 @@ vec3 rockLayerColor(float s, float y, float top, float cb, float sb, int row, fl
     float slab = 0.0;
     if (hero) {
       vec4 F = spurFace(s, y);
-      // Below the summit the slab gives way to the wall under it.
-      float s0 = uSlab.x + 0.3 * max(y - top - 0.03, 0.0) + (vnoise(vec2(y * 90.0, 3.0)) - 0.5) * 0.02;
-      slab = smoothstep(s0 - 0.01, s0 + 0.025, s) * smoothstep(uSlab.y + 0.01, uSlab.y - 0.04, s);
+      // The slab is the mountain's sloping top, seen edge on under the
+      // skyline. The pillars of the wall below it (the spurs past its start,
+      // see terrain.js) stand up into its lower edge, each to a point.
+      // Their tops are blunt and uneven, some broader than others.
+      float lip = 9.0;
+      for (int i = 0; i < 32; i++) {
+        vec4 P = uSpur[i];
+        if (P.y > 5.0) break;
+        if (P.x <= uSlab.x) continue;
+        // A rounded cap hw either side of the pillar's line, then its flanks.
+        float hw = 0.002 + 0.005 * hash12(vec2(float(i), 4.1));
+        float d = abs(s - P.x);
+        float t = min(d, hw);
+        lip = min(lip, P.y + 0.6 * t * t / hw + 2.4 * max(d - hw, 0.0));
+      }
+      lip += (vnoise(vec2(s * 260.0, 1.0)) - 0.5) * 0.005 + (vnoise(vec2(s * 900.0, 2.0)) - 0.5) * 0.002;
+      slab = smoothstep(lip + 0.0015, lip - 0.0015, y) * smoothstep(uSlab.x - 0.006, uSlab.x + 0.002, s)
+           * smoothstep(uSlab.y + 0.012, uSlab.y - 0.008, s);
       vec2 fg = mix(F.yz, vec2(-0.12, 2.0), slab);
       nx = clamp(-fg.x * 0.6, -1.2, 1.2);
       ny = fg.y * 0.4;
       crease = F.w * (1.0 - slab);
       zFace = F.x;
-      p = mix(p, vec2(dot(p, vec2(0.6, -0.8)), dot(p, vec2(0.8, 0.6))), step(0.5, slab));
+      // Past the saddle the grassy range's bands of rock have no spurs of
+      // their own; they face the way its crest falls.
+      float past = smoothstep(uSlab.y, uSlab.y + 0.03, s);
+      nx = mix(nx, nxMacro, past);
+      ny *= 1.0 - past;
+      crease *= 1.0 - past;
     }
     float e = PX * freq;
     float rib;
     float rd;
     float h0 = rockH(p, rib);
     vec2 g = vec2(rockH(p + vec2(e, 0.0), rd) - h0, rockH(p + vec2(0.0, e), rd) - h0) / e;
-    g *= 1.0 - 0.2 * slab;
+    // The slab is far smoother than the walls; a low sun across it would
+    // pick out any ribs as stripes.
+    g *= 1.0 - 0.95 * slab;
     // The Sella's walls are bedded: ledges run along them and catch the sky,
     // and a terrace of scree and snow parts the lower wall from the upper.
     float bed = row == 3 ? smoothstep(uSella.x, uSella.x + 0.03, s) * smoothstep(uSella.y, uSella.y - 0.03, s) : 0.0;
@@ -482,6 +506,10 @@ vec3 rockLayerColor(float s, float y, float top, float cb, float sb, int row, fl
     float joint = 0.0;
     float gully = 0.0;
     float terr = 0.0;
+    float shelf = 0.0;
+    // Which tier of the Sella: the upper wall stands back from the lower, so
+    // their pillars and stains don't line up.
+    float tier = 0.0;
     if (bw > 0.0) {
       // Beds, each a slightly different stone, and here and there the top
       // of one makes a ledge where scree lies.
@@ -495,9 +523,14 @@ vec3 rockLayerColor(float s, float y, float top, float cb, float sb, int row, fl
       ny += 0.3 * ledge;
     }
     if (bed > 0.0) {
+      float upper = smoothstep(0.004, 0.02, uSella.z - top);
+      float ly = uSella.z + ((vnoise(vec2(s * 5.0, 1.0)) - 0.5) * 0.008 + (vnoise(vec2(s * 30.0, 1.0)) - 0.5) * 0.003) * upper;
+      float lip = ly + (vnoise(vec2(s * 150.0, 8.0)) - 0.5) * 0.0025;
+      // Where the upper tier has fallen back, the whole wall is the lower one.
+      tier = mix(1.0, smoothstep(lip - 0.001, lip + 0.001, y), upper) * bed;
       // Broad pillars between the gullies, each with a face to the west and
       // one to the east, and joints cutting the beds into blocks.
-      float pc = s * 15.0 + (vnoise(vec2(s * 5.0, 1.0)) - 0.5) * 1.6 + (vnoise(vec2(y * 30.0, 3.0)) - 0.5) * 0.08;
+      float pc = s * 15.0 + (vnoise(vec2(s * 5.0, 1.0)) - 0.5) * 1.6 + (vnoise(vec2(y * 30.0, 3.0)) - 0.5) * 0.08 + tier * 0.45;
       float pf = fract(pc);
       float ph = hash12(vec2(floor(pc), 4.4));
       float pa = 0.3 + 0.4 * ph;
@@ -507,25 +540,45 @@ vec3 rockLayerColor(float s, float y, float top, float cb, float sb, int row, fl
       float jx = s * 70.0 + 0.5 * hash12(vec2(floor(y / 0.011), 1.3));
       joint = smoothstep(0.1, 0.0, abs(fract(jx) - 0.5)) * step(0.6, hash12(vec2(floor(jx), floor(y / 0.011)))) * bed;
       g.x *= 1.0 - 0.6 * bed;
-      float ly = uSella.z + (vnoise(vec2(s * 30.0, 1.0)) - 0.5) * 0.003;
-      float T = 0.005 + 0.006 * vnoise(vec2(s * 18.0, 3.0));
-      terr = smoothstep(ly - T - 0.0015, ly - T + 0.0015, y) * smoothstep(ly + PX, ly - PX, y) * bed;
-      ny = mix(ny, 0.7, terr);
-      nx *= 1.0 - 0.8 * terr;
+      // The terrace between the tiers: a shelf of scree and old snow that
+      // rises and falls a little along the wall, widens and narrows, and is
+      // broken where a gully comes down through it. Where the upper tier has
+      // fallen back to nothing it is the lower tier's top, and lies level.
+      float T = 0.004 + 0.009 * smoothstep(0.25, 0.85, vnoise(vec2(s * 8.0, 3.0)));
+      // Cones of scree run up from it into the upper wall's gullies.
+      float gs = min(pf, 1.0 - pf) / 15.0;
+      float cone = max(0.0, (0.006 + 0.008 * ph) * step(0.45, ph) - gs * 1.4) * upper;
+      float yt = ly - T - cone + (vnoise(vec2(s * 400.0, 7.0)) - 0.5) * 0.002;
+      float cut = smoothstep(0.6, 0.8, vnoise(vec2(s * 36.0, 5.0)));
+      terr = smoothstep(yt - 0.0015, yt + 0.0015, y) * smoothstep(lip + PX, lip - PX, y) * bed * (1.0 - 0.9 * cut);
+      // The upper wall's foot stands in the shelf's shade, and the shelf's
+      // lip shades the top of the wall below it.
+      float above = yt - y;
+      float below = y - lip;
+      shelf = (smoothstep(0.012, 0.0, above) * step(0.0, above) * 0.15 + smoothstep(0.005, 0.0, below) * step(0.0, below) * 0.12)
+            * bed * (1.0 - cut) * upper;
+      ny = mix(ny, 0.55, terr);
+      nx = mix(nx, sign(0.5 - pf) * 0.35 * smoothstep(0.0, 0.004, cone), terr);
     }
+    // The slab swells and sags a little.
+    nx += (vnoise(p * 7.0 + 5.0) - 0.5) * 0.25 * slab;
     vec3 N = normalize(vec3(nx - g.x, 0.12 + ny + g.y, 1.0));
 
     // Neighbouring towers block a low sun, and the ribs shade the gullies
-    // beside them.
+    // beside them. On the main massif the spurs cast the towers' shadows
+    // instead: this crude test, from the crest alone, shades a whole column
+    // down to the foot and leaves a straight vertical edge.
     float sideLight = uSunDir.x / max(0.2, abs(uSunDir.z) + 0.15);
     float sh = 1.0;
-    float e0 = ridge(row, s).z;
-    for (int i = 1; i <= 3; i++) {
-      float k = float(i) * 0.011;
-      float ek = ridge(row, s + sign(uSunDir.x) * k).z;
-      sh = min(sh, smoothstep(-0.004, 0.006, k * 0.5 / max(abs(sideLight), 0.05) - (ek - e0) * 1.6));
+    if (!hero) {
+      float e0 = ridge(row, s).z;
+      for (int i = 1; i <= 3; i++) {
+        float k = float(i) * 0.011;
+        float ek = ridge(row, s + sign(uSunDir.x) * k).z;
+        sh = min(sh, smoothstep(-0.004, 0.006, k * 0.5 / max(abs(sideLight), 0.05) - (ek - e0) * 1.6));
+      }
+      sh = mix(1.0, sh, smoothstep(0.02, 0.15, v));
     }
-    sh = mix(1.0, sh, smoothstep(0.02, 0.15, v));
     vec2 Lp = vec2(uSunDir.x, -uSunDir.y);
     float Ll = length(Lp);
     // Only a low sun, from the side, throws a rib's shadow far enough to see.
@@ -538,35 +591,47 @@ vec3 rockLayerColor(float s, float y, float top, float cb, float sb, int row, fl
         float d = 0.0025 * float(i * i);
         rs = min(rs, smoothstep(-0.001, 0.001, h0 + d * rise - rockH(p + dir * d, rd)));
       }
-      sh = min(sh, mix(1.0, rs, side));
+      sh = min(sh, mix(1.0, rs, side * (1.0 - slab)));
     }
     sh *= 1.0 - gul * 0.12;
     // Spurs throw their shadows across the faces beside them.
-    if (hero) sh = min(sh, spurShadow(s, y, zFace, row - 1));
+    // The slab lies above them all, a plane open to the sun.
+    if (hero) sh = min(sh, mix(spurShadow(s, y, zFace, row - 1), 1.0, slab));
 
     // Gullies and couloirs lie in their own shade.
-    float ao = mix(0.6 + 0.4 * smoothstep(0.2, 0.75, rib), 0.85, 0.6 * bed)
-             * (1.0 - gul * 0.15) * (1.0 - 0.3 * crease) * (1.0 - (0.22 * gully + 0.12 * joint) * (1.0 - terr));
+    float ao = mix(0.7 + 0.3 * smoothstep(0.2, 0.75, rib), 0.85, max(0.6 * bed, slab))
+             * (1.0 - gul * 0.15) * (1.0 - 0.2 * crease) * (1.0 - (0.22 * gully + 0.12 * joint) * (1.0 - terr)) * (1.0 - shelf);
 
     // Pale dolomite, cream to grey, with rust where blocks broke away. The
     // tones run down the wall, as the weather stains it.
-    float big = fbm3(vec2(p.x * 9.0, p.y * 1.2));
+    vec2 pt = p + vec2(tier * 3.7, 0.0);
+    float big = fbm3(vec2(pt.x * 9.0, pt.y * 1.2));
     vec3 alb = mix(LIME, LIME_GREY, smoothstep(0.4, 0.85, big));
-    float och = smoothstep(0.58, 0.8, fbm3(vec2(p.x * 14.0 + 4.0, p.y * 1.8)));
-    alb = mix(alb, OCHRE, och * 0.45);
+    float och = smoothstep(0.58, 0.8, fbm3(vec2(pt.x * 14.0 + 4.0, pt.y * 1.8)));
+    alb = mix(alb, OCHRE, och * (0.45 - 0.25 * bed));
     // Dark streaks where water runs down, mostly in the gullies.
-    float st = smoothstep(0.62, 0.9, vnoise(vec2(p.x * 260.0, p.y * 4.0)))
-             * smoothstep(0.35, 0.6, vnoise(vec2(p.x * 40.0, p.y * 1.5) + 3.0));
-    st *= (1.0 - 0.7 * smoothstep(0.3, 0.8, rib)) * smoothstep(0.05, 0.3, v);
+    float st = smoothstep(0.62, 0.9, vnoise(vec2(pt.x * 260.0, pt.y * 4.0)))
+             * smoothstep(0.35, 0.6, vnoise(vec2(pt.x * 40.0, pt.y * 1.5) + 3.0));
+    st *= (1.0 - 0.7 * smoothstep(0.3, 0.8, rib)) * smoothstep(0.05, 0.3, v) * (1.0 - slab);
     alb = mix(alb, STREAK, st * 0.5);
     // Lichen low on the wall, and the grain of the stone.
     alb = mix(alb, vec3(0.58, 0.6, 0.53), smoothstep(0.65, 1.0, v) * 0.25);
-    // Turf holds on the slab's ledges, more of it lower down.
     if (slab > 0.0) {
-      // Its beds show as soft bands along the dip.
-      alb *= 1.0 + (fbm3(vec2(p.x * 30.0, p.y * 3.0) + 2.0) - 0.5) * 0.25 * slab;
-      float turf = smoothstep(0.58, 0.75, fbm3(vec2(p.x * 26.0, p.y * 5.0) + 4.0) + 0.3 * v - 0.12);
-      alb = mix(alb, mix(GRASS_G, GRASS_Y, 0.4) * 0.85, turf * slab * 0.8);
+      // The slab's stone is pale and mottled, finely lined along its dip
+      // where one bed shows under the next. Where its tail runs down to the
+      // Alpe the meadow climbs onto it from below, in strips along the slope.
+      float mot = fbm3(vec2(p.x * 20.0, p.y * 15.0) + 2.0);
+      vec3 sa = mix(LIME, LIME_GREY, smoothstep(0.3, 0.75, mot));
+      float lines = vnoise(vec2(s * 30.0, depth * 650.0)) * smoothstep(0.3, 0.6, vnoise(vec2(s * 45.0, depth * 90.0)));
+      sa *= (0.94 + 0.1 * vnoise(vec2(p.x * 150.0, p.y * 120.0))) * (1.0 - 0.12 * lines);
+      float gn = fbm3(vec2(s * 32.0, depth * 110.0) + 4.0) + 0.1 * vnoise(vec2(s * 200.0, depth * 500.0));
+      float turf = smoothstep(0.66, 0.8, v + 0.3 * (gn - 0.5));
+      // The same grass as on the slopes below the walls.
+      vec3 grass = mix(GRASS_G, GRASS_Y, 0.25 + 0.35 * fbm3(vec2(s * 30.0, y * 60.0))) * 0.84;
+      sa = mix(sa, grass, turf);
+      alb = mix(alb, sa, slab);
+      // Turf lies flatter than the rock and takes the light as the meadow does.
+      N = normalize(mix(N, normalize(vec3(N.x * 0.3, 0.55, 0.85)), turf * slab));
     }
     alb *= 0.94 + 0.09 * vnoise(vec2(p.x * 600.0, p.y * 250.0));
     // Paler and greyer beds, and scree on the ledges.
@@ -574,9 +639,8 @@ vec3 rockLayerColor(float s, float y, float top, float cb, float sb, int row, fl
     alb = mix(alb, SCREE * 1.1, ledge * 0.3);
     if (bed > 0.0) {
       // The terrace's scree, with snow lying in it.
-      vec3 tc = SCREE * (0.94 + 0.12 * vnoise(vec2(s * 700.0, y * 500.0)));
-      tc = mix(tc, SNOW, smoothstep(0.5, 0.8, vnoise(vec2(s * 90.0, y * 300.0) + 2.0)) * 0.5);
-      tc = mix(tc, mix(GRASS_G, GRASS_Y, 0.5) * 0.85, smoothstep(0.6, 0.85, vnoise(vec2(s * 40.0, 9.0))) * 0.3);
+      vec3 tc = SCREE * (0.88 + 0.16 * vnoise(vec2(s * 700.0, y * 500.0)));
+      tc = mix(tc, SNOW, smoothstep(0.6, 0.85, vnoise(vec2(s * 90.0, y * 300.0) + 2.0)) * 0.3);
       alb = mix(alb, tc, terr);
     }
 
@@ -586,14 +650,19 @@ vec3 rockLayerColor(float s, float y, float top, float cb, float sb, int row, fl
     alb = mix(alb, SNOW, clamp(snowy, 0.0, 1.0) * 0.85);
 
     vec3 c = shade(alb, N, ao, sh);
+    // The pale rock in the sun lights the faces turned from it, so shade on
+    // these walls is grey, never black.
+    float lit = clamp(dot(N, uSunDir), 0.0, 1.0) * sh;
+    c += alb * (uSunCol * 0.16 + uAmb * 0.15) * (1.0 - lit) * mix(1.0, ao, 0.5);
     // A low sun sets the pale rock glowing.
     c += alb * uSunCol * max(dot(N, uSunDir), 0.0) * sh * 0.25 * smoothstep(0.4, 0.06, uSunDir.y) * (1.0 - uStars);
     // Early snow lies on the flatter tops and ledges just below them.
     float flatTop = smoothstep(0.8, 0.2, abs(dE.x));
     float capD = (0.0025 + 0.006 * vnoise(vec2(s * 150.0 * freq, 1.7)) + 0.002 * vnoise(vec2(s * 900.0 * freq, 3.1))) / sqrt(freq) * flatTop;
     float cap = clamp((capD - depth) / PX + 0.5, 0.0, 1.0) * smoothstep(0.3, 0.5, vnoise(vec2(s * 400.0 * freq, y * 200.0 * freq)));
-    // On the Sella's long level rim it lies only here and there.
-    cap *= mix(1.0, smoothstep(0.6, 0.75, vnoise(vec2(s * 45.0, 4.0))), bed);
+    // On the Sella's long level rim it lies only here and there, and none on
+    // a sliver of rock, where it would only frost the crest.
+    cap *= mix(1.0, smoothstep(0.6, 0.75, vnoise(vec2(s * 45.0, 4.0))), bed) * smoothstep(0.02, 0.05, cb - top) * (1.0 - 0.85 * slab);
     c = mix(c, shade(SNOW, normalize(vec3(N.x * 0.3, 0.75, 0.65)), 1.0, sh), cap * 0.9);
     // Thin bright line along the crest when lit from the side.
     c += alb * uSunCol * exp(-depth * 1400.0 / freq) * 0.25 * abs(uSunDir.x);
@@ -801,8 +870,12 @@ vec2 meadowDensity(float x, float y, float g) {
   float n = vnoise(q) * 0.58 + vnoise(q * 2.3 + 5.0) * 0.27 + vnoise(q * 5.3 + 9.0) * 0.15;
   float d = smoothstep(0.47, 0.62, n) * 0.95 + smoothstep(0.38, 0.48, n) * 0.08 + 0.02;
   float hs = n < 0.44 ? 1.0 : mix(0.45, 1.0, smoothstep(0.47, 0.72, n));
-  // A dark belt of forest along the foot of the massif.
-  float belt = smoothstep(0.022, 0.004, y - g) * smoothstep(0.32, 0.5, vnoise(vec2(x * 8.0, 2.0)));
+  // A dark belt of forest along the foot of the massif, deeper and closer
+  // where it climbs over the foothills.
+  float knoll = clamp((0.608 - g) / 0.04, 0.0, 1.0);
+  float bd = 0.022 + 0.03 * knoll;
+  float belt = smoothstep(bd, bd * mix(0.2, 0.5, knoll), y - g + (vnoise(vec2(x * 40.0, 4.0)) - 0.5) * 0.01)
+             * smoothstep(0.32 - 0.25 * knoll, 0.5 - 0.25 * knoll, vnoise(vec2(x * 8.0, 2.0)));
   if (lake) {
     // Spruce crowding the far shore.
     float far = lk.y - y + (vnoise(vec2(x * 22.0, 7.0)) - 0.5) * 0.01;
@@ -1078,7 +1151,6 @@ vec4 reeds(float s, float y, float wa) {
   return o;
 }
 
-vec3 meadowAlb(float s, float y, float hl);
 
 vec3 lakeColor(float s, float y, float far, float near, vec2 fc) {
   float t = uTime;
@@ -1190,8 +1262,23 @@ vec3 plateauGround(float s, float y, float top, vec2 fc) {
   float gx = hills(p + vec2(0.15, 0.0)) - hills(p - vec2(0.15, 0.0));
   float gy = hills(p + vec2(0.0, 0.15)) - hills(p - vec2(0.0, 0.15));
   vec3 N = normalize(vec3(-gx * 2.6, 1.0, 0.35 + gy * 1.3));
+  // Along the meadow's far edge the foothills' flanks turn toward the sun or
+  // away from it as the edge rises and falls.
+  if (d < 0.045) {
+    float fl = clamp((ridge(6, s + 0.004).x - ridge(6, s - 0.004).x) / 0.008, -2.0, 2.0) * smoothstep(0.045, 0.0, d);
+    N = normalize(N + vec3(fl * 0.9, 0.0, -0.25 * abs(fl)));
+  }
   float hl = 0.5 + (hills(p) - 0.5) * 1.6;
   vec3 alb = meadowAlb(s, y, clamp(hl, 0.0, 1.0));
+  // The forest on the foothills is dense: between its trees only the dark
+  // of the wood beneath them. The same belt as in meadowDensity().
+  float knoll = clamp((0.608 - top) / 0.04, 0.0, 1.0);
+  if (knoll > 0.0 && d < 0.06) {
+    float bd = 0.022 + 0.03 * knoll;
+    float wood = smoothstep(bd, bd * mix(0.2, 0.5, knoll), d + (vnoise(vec2(s * 40.0, 4.0)) - 0.5) * 0.01)
+               * smoothstep(0.32 - 0.25 * knoll, 0.5 - 0.25 * knoll, vnoise(vec2(s * 8.0, 2.0))) * knoll;
+    alb = mix(alb, mix(SPRUCE, MUGO, vnoise(vec2(s * 260.0, y * 400.0))), wood * 0.85);
+  }
 
   // The lake lies in a hollow: the ground falls to it, lush and damp near the
   // water, and where it runs out at either end the shallows fill with sedge.
