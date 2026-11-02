@@ -79,8 +79,8 @@
     { alt: 1, zen: '#666f94', mid: '#bb9fa6', hor: '#f6bb94', glow: '#ffc488', sun: '#ff8d5c', amb: '#8a84a2', haze: '#d8b2a6' },
     { alt: 5, zen: '#a9abbd', mid: '#e3cbbd', hor: '#f6cfab', glow: '#ffdcaa', sun: '#ffb37a', amb: '#a29cb0', haze: '#e8ccba' },
     { alt: 12, zen: '#c5c9d2', mid: '#ecdccc', hor: '#f3dac2', glow: '#fbe7cd', sun: '#ffd7a8', amb: '#aeacbb', haze: '#e8d6c6' },
-    { alt: 25, zen: '#c9d1da', mid: '#ebe3d8', hor: '#efe2d1', glow: '#f2e8da', sun: '#fff0dc', amb: '#b2b6c2', haze: '#e4dbd0' },
-    { alt: 90, zen: '#c4cfdb', mid: '#e9e5de', hor: '#ede5d9', glow: '#efe9df', sun: '#fff5e8', amb: '#b6bbc6', haze: '#e2ddd5' },
+    { alt: 25, zen: '#bec7d1', mid: '#e2dace', hor: '#e9dccb', glow: '#f2e8da', sun: '#fff0dc', amb: '#b2b6c2', haze: '#dbd3c8' },
+    { alt: 90, zen: '#b9c4d0', mid: '#e0dcd5', hor: '#e6ded2', glow: '#efe9df', sun: '#fff5e8', amb: '#b6bbc6', haze: '#d9d4cc' },
   ].map((k) => {
     const o = { alt: k.alt };
     for (const n of ['zen', 'mid', 'hor', 'glow', 'sun', 'amb', 'haze']) o[n] = hex(k[n]);
@@ -156,7 +156,7 @@
       moonLight,
       // 0 at noon, 1 at night: used for the animals and the text.
       // Valley mist: thick around dawn, a trace at noon, some under the moon.
-      mist: e.sunAz < 180 ? 0.25 + 0.75 * smooth(24, 4, e.sunAlt) : 0.3 + 0.35 * smooth(0, -10, e.sunAlt),
+      mist: e.sunAz < 180 ? 0.14 + 0.86 * smooth(24, 4, e.sunAlt) : 0.16 + 0.14 * smooth(14, 2, e.sunAlt) + 0.35 * smooth(0, -10, e.sunAlt),
       night: smooth(2, -8, e.sunAlt),
       day: smooth(-2, 8, e.sunAlt),
     };

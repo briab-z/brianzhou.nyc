@@ -60,6 +60,14 @@
     return { right, bottom };
   }
 
+  // Where the text sits now, for the stars to keep clear of. On a phone the
+  // notes lie on paper further down, so only the intro and its cue count.
+  function placeText() {
+    if (!land) return;
+    const sel = phone.matches ? ['.intro', '.more-cue'] : ['.intro', '.notes'];
+    land.setText(sel.map((q) => document.querySelector(q)).filter(Boolean).map((el) => el.getBoundingClientRect()));
+  }
+
   function rockTop(s) {
     return Math.min(D.topAt(D.L.HERO, s), D.topAt(D.L.MIDFAR, s), D.topAt(D.L.FAR, s));
   }
@@ -103,6 +111,7 @@
     if (land) land.resize(W, H, renderScale);
     if (life) life.resize(W, H, Math.min(window.devicePixelRatio || 1, 2));
     placeMoon();
+    placeText();
   }
 
   function toScene(x, y, depth) {
@@ -240,8 +249,10 @@
 
   // Frames stall while a phone scrolls the page, whatever the GPU is doing.
   let lastScroll = -Infinity;
+  let textMoved = true;
   window.addEventListener('scroll', () => {
     lastScroll = performance.now();
+    textMoved = true;
   }, { passive: true });
 
   // Fish rising now and then.
@@ -311,6 +322,11 @@
       relayout = false;
       layout();
       if (land && light) land.setLight(light, moon);
+    }
+    // The text rises into place as the page opens, and scrolls on a phone.
+    if (textMoved || clock < 43) {
+      textMoved = false;
+      placeText();
     }
 
     ambientRipples(clock);

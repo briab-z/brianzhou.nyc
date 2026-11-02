@@ -927,7 +927,8 @@
     let lastDt = 0;
     function update(dt, t, p) {
       lastDt = dt;
-      if (dt <= 0) return;
+      // Nothing lives here until the first layout gives the scene a size.
+      if (dt <= 0 || !built) return;
       updateBirds(dt, t, p);
       updateMarmots(dt, p);
       updateSheep(dt);
@@ -991,6 +992,7 @@
 
     let pointerRef = { active: false, x: -9999, y: -9999 };
     function draw(t) {
+      if (!built) return;
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
       ctx.clearRect(0, 0, W, H);
       const k = scaleK();
@@ -1016,6 +1018,7 @@
 
     // A still frame for reduced motion: animals out and visible.
     function still() {
+      if (!built) return;
       for (const m of marmots) {
         m.state = 'up';
         m.rise = 0.85;

@@ -60,6 +60,7 @@ uniform float uStars;
 uniform float uLamp;
 uniform float uDay;
 uniform float uMist;
+uniform vec4 uText[2];   // the text blocks on screen: css px left, top, right, bottom
 
 out vec4 outColor;
 
@@ -200,6 +201,12 @@ vec3 sky(float s, float y, vec2 fc) {
   if (uStars > 0.01) {
     vec2 cp = vec2(fc.x, uRes.y - fc.y) / uDpr;
     float fade = uStars * smoothstep(0.62, 0.3, y) * (1.0 - 0.55 * uMoonK);
+    // Few stars behind the text, where they would read as stray dots.
+    for (int i = 0; i < 2; i++) {
+      vec4 R = uText[i];
+      vec2 out2 = max(R.xy - cp, cp - R.zw);
+      fade *= 1.0 - 0.85 * smoothstep(32.0, 4.0, length(max(out2, 0.0)));
+    }
     vec2 mw = vec2(s, y) - vec2(0.3, 0.1);
     float band = exp(-pow(dot(mw, normalize(vec2(0.55, 1.0))) / 0.13, 2.0));
     float dust = fbm(vec2(s * 5.0, y * 5.0) + 3.0);
@@ -233,7 +240,9 @@ vec3 sky(float s, float y, vec2 fc) {
   }
 
   float t = uTime;
-  vec3 cloudLit = uAmb * 0.7 + uSunCol * mix(0.92, 0.4, uStars);
+  // Under a high sun the clouds' tops stop short of pure white, which would
+  // only glare.
+  vec3 cloudLit = uAmb * 0.7 + uSunCol * mix(0.92, 0.4, uStars) * mix(1.0, 0.74, smoothstep(0.2, 0.5, uSunDir.y));
   vec3 cloudSh = uAmb * mix(0.95, 0.6, uStars) + uSunCol * 0.18;
   float cloudK = 1.0 - 0.45 * uStars;
 
@@ -255,7 +264,9 @@ vec3 sky(float s, float y, vec2 fc) {
   if (lowBand > 0.0) {
     vec2 q = vec2(s * 2.3 + t * 0.0028, y * 5.2);
     float rise = (0.53 - y) / 0.22;
-    float patchy = smoothstep(0.3, 0.62, vnoise(vec2(s * 1.4 + t * 0.0015, 3.0)));
+    // Where the clouds gather: a broad 2D patchiness, so a bank thins out in
+    // ragged billows rather than stopping at a vertical edge.
+    float patchy = smoothstep(0.22, 0.7, fbm3(vec2(s * 1.4 + t * 0.0015, y * 4.0 + 3.0) + w * 0.6));
     float k = fbm(q) * 1.15 - rise * 0.55 - 0.12;
     float dc = smoothstep(0.18, 0.34, k * patchy) * lowBand;
     if (dc > 0.002) {
@@ -869,9 +880,11 @@ float treeDensity(float x, float y, bool forest, float g) {
     float e = y - g - forestEdge(x);
     float deep = smoothstep(0.0, 0.08, e);
     float d = smoothstep(0.4 - 0.1 * deep, 0.68 - 0.1 * deep, grove(x, y));
-    // Small gaps where an old tree fell.
+    // Small gaps where an old tree fell, and within a grove the trees stand
+    // in knots and thin patches rather than in even ranks.
     float gap = smoothstep(0.62, 0.78, vnoise(vec2(x * 16.0, y * 48.0) + 3.0));
-    return (0.06 + 0.88 * d * (1.0 - 0.5 * gap)) * smoothstep(-0.015, 0.01, e);
+    float knot = mix(0.5, 1.0, smoothstep(0.32, 0.62, vnoise(vec2(x * 52.0, y * 150.0) + 17.0)));
+    return (0.025 + 0.9 * d * knot * (1.0 - 0.5 * gap)) * smoothstep(-0.015, 0.01, e);
   }
   return meadowDensity(x, y, g).x;
 }
@@ -888,7 +901,10 @@ vec2 meadowDensity(float x, float y, float g) {
   vec2 q = vec2(x * 8.0, y * 26.0);
   q += (vec2(vnoise(q * 1.7 + 11.0), vnoise(q * 1.7 + 23.0)) - 0.5) * 1.6;
   float n = vnoise(q) * 0.58 + vnoise(q * 2.3 + 5.0) * 0.27 + vnoise(q * 5.3 + 9.0) * 0.15;
-  float d = smoothstep(0.47, 0.62, n) * 0.95 + smoothstep(0.38, 0.48, n) * 0.08 + 0.02;
+  // Inside a grove the trees bunch up and thin out; the pasture between
+  // groves stays mostly open.
+  float knot = mix(0.55, 1.0, smoothstep(0.3, 0.62, vnoise(vec2(x * 70.0, y * 210.0) + 17.0)));
+  float d = smoothstep(0.47, 0.62, n) * 0.95 * knot + smoothstep(0.38, 0.48, n) * 0.06 + 0.007;
   float hs = n < 0.44 ? 1.0 : mix(0.45, 1.0, smoothstep(0.47, 0.72, n));
   // A dark belt of forest along the foot of the massif, deeper and closer
   // where it climbs over the foothills.
@@ -908,6 +924,14 @@ vec2 meadowDensity(float x, float y, float g) {
   return vec2(d, hs);
 }
 
+// How big a tree grows, against the tallest a tree can be (1.37, which
+// trees() allows for). Mostly middling trees, some saplings, now and then an
+// old giant; and whole stands run a little older or younger than the next.
+float treeSize(vec2 cell, float r4, float tx, float ty) {
+  float age = 0.84 + 0.16 * vnoise(vec2(tx * 14.0, ty * 50.0) + 31.0);
+  return (0.5 + 0.65 * r4 * r4 + 0.22 * step(0.93, hash12(cell + 2.9))) * age;
+}
+
 // The meadow tree in grid cell (i, j), if one grows there: its base and
 // height, or zero height where none does. Must match trees().
 vec3 meadowTree(float i, float j) {
@@ -921,7 +945,7 @@ vec3 meadowTree(float i, float j) {
   float tx = (i + 0.05 + 0.9 * hash12(cell)) * cw;
   float r4 = hash12(cell + 71.3);
   float persp = mix(0.55, 1.3, smoothstep(0.6, 0.84, ty));
-  float size = 0.55 + 0.6 * r4 * r4 + 0.22 * step(0.93, hash12(cell + 2.9));
+  float size = treeSize(cell, r4, tx, ty);
   vec2 dens = meadowDensity(tx, ty, lk.x);
   if (hash12(cell + 47.7) > dens.x) return vec3(0.0);
   return vec3(tx, ty, 0.021 * persp * size * dens.y);
@@ -1003,8 +1027,7 @@ void trees(float s, float y, bool forest, inout vec3 acc, inout float A) {
       float tx = (i + 0.05 + 0.9 * r1) * cw;
       float r4 = hash12(cell + 71.3);
       float persp = forest ? mix(0.75, 1.3, smoothstep(0.66, 0.95, ty)) : mix(0.55, 1.3, smoothstep(0.6, 0.84, ty));
-      // Mostly middling trees, some saplings, now and then an old giant.
-      float size = 0.55 + 0.6 * r4 * r4 + 0.22 * step(0.93, hash12(cell + 2.9));
+      float size = treeSize(cell, r4, tx, ty);
       float hgt = (forest ? 0.05 : 0.021) * persp * size * 1.12;
       if (up > hgt) continue;
       float dx = s - tx;
@@ -1231,12 +1254,23 @@ vec3 lakeColor(float s, float y, float far, float near, vec2 fc) {
   float fres = mix(0.93, 0.5, u * u) * mix(1.0, 0.82, wind);
   vec3 body = mix(WATER_DEEP, WATER_SHALLOW, smoothstep(0.7, 1.0, u)) * (uAmb * 0.75 + uSunCol * 0.35 * max(uSunDir.y, 0.0));
   vec3 c = mix(body, refl * vec3(0.84, 0.89, 0.88), fres);
-  // Roughened patches pick up a little more of the sky.
-  c = mix(c, skyBase(0.15) * 0.82, wind * 0.12 * (1.0 - u * 0.5));
+  // Roughened patches pick up a little more of the sky, more so at night,
+  // when it is the brightest thing about.
+  c = mix(c, skyBase(0.15) * 0.82, wind * (0.12 + 0.12 * uStars) * (1.0 - u * 0.5));
 
   // Glints on the wavelets, brighter where the breeze is.
   float glint = smoothstep(0.78, 0.95, w2) * smoothstep(0.55, 0.75, w1);
   c += (uSunCol * 0.5 + uAmb * 0.15) * glint * (0.15 + 0.5 * wind) * (1.0 - u * 0.6);
+
+  // After dark the hut's lit window lays a broken path of light across the
+  // water toward us, widening and fading as it comes.
+  float dh = y - uHut.y;
+  if (uLamp > 0.01 && dh > 0.0) {
+    float pw = 0.0022 + dh * 0.22;
+    float path = exp(-pow((s + slope * 0.004 - uHut.x + 0.0062) / pw, 2.0)) * exp(-dh * 30.0);
+    float spark = smoothstep(0.45, 0.8, w1 * 0.55 + w2 * 0.65 - 0.1 + rip * 0.3);
+    c += LAMP * uLamp * path * (0.18 + 1.3 * spark) * 0.6;
+  }
   // Ripple rings catch the light on one side and darken on the other.
   c += (uAmb * 0.3 + uSunCol * 0.25) * max(rip, 0.0) * 0.35;
   c -= c * max(-rip, 0.0) * 0.25;
@@ -1586,7 +1620,7 @@ void main() {
     'uSpur', 'uCoul', 'uSlab', 'uSella',
     'uPass', 'uTreesP', 'uTreesF', 'uFar', 'uFoot', 'uRock', 'uBakeM', 'uCoverF',
     'uSunDir', 'uSunCol', 'uAmb', 'uZen', 'uMid', 'uHor', 'uGlow', 'uGlowX', 'uHaze',
-    'uMoon', 'uMoonK', 'uStars', 'uLamp', 'uDay', 'uMist',
+    'uMoon', 'uMoonK', 'uStars', 'uLamp', 'uDay', 'uMist', 'uText',
   ];
 
   D.createLandscape = function (canvas, ridgeData) {
@@ -1656,6 +1690,7 @@ void main() {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
     set('uRidge', 'uniform1i', 0);
+    set('uText', 'uniform4fv', new Float32Array(8).fill(-1e4));
     set('uRidgeInfo', 'uniform3f', D.S_MIN, D.S_MAX, D.NS);
     set('uLake', 'uniform4f', D.LAKE.s, D.LAKE.y, D.LAKE.a, D.LAKE.foot);
     set('uHut', 'uniform2f', D.HUT.s, D.HUT.y);
@@ -1854,6 +1889,12 @@ void main() {
         set('uLamp', 'uniform1f', L.lamp);
         set('uDay', 'uniform1f', L.day);
         set('uMist', 'uniform1f', L.mist);
+      },
+      // Where the text sits (css px rects), so the stars keep clear of it.
+      setText(rects) {
+        const a = new Float32Array(8).fill(-1e4);
+        rects.slice(0, 2).forEach((r, i) => a.set([r.left, r.top, r.right, r.bottom], i * 4));
+        set('uText', 'uniform4fv', a);
       },
       // still: redraw everything at once, for a frame that stays up.
       render(t, view, ripples, still) {

@@ -390,8 +390,11 @@
     return y + 0.01 * (fbm1(s * 9 + 33) - 0.5);
   }
 
+  // The near bank rolls in low swells, a few across the view, so it never
+  // meets the woods behind it along a level line.
   function nearTop(s) {
-    return 0.846 + 0.012 * Math.sin(s * 3.1 + 0.6) + 0.012 * (fbm1(s * 6 + 70) - 0.5) - 0.022 * smooth(0.3, 1.3, s);
+    return 0.846 + 0.012 * Math.sin(s * 3.1 + 0.6) + 0.012 * (fbm1(s * 6 + 70) - 0.5) - 0.022 * smooth(0.3, 1.3, s)
+      + 0.022 * (fbm1(s * 11 + 12) - 0.5) + 0.006 * Math.sin(s * 23 + 1.7);
   }
 
   // Far and near shore of the lake at s, or [0, 0] outside it. The far shore
