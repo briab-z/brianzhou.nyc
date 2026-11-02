@@ -275,7 +275,7 @@ vec3 sky(float s, float y, vec2 fc) {
 // and gullies branch and merge as they run down the wall, and finer ribs
 // ride on the bigger ones. rib: how high the big ribs stand (0 in a gully).
 float rockH(vec2 p, out float rib) {
-  vec2 q = vec2(p.x * 26.0, p.y * 6.5);
+  vec2 q = vec2(p.x * 24.0, p.y * 9.0);
   q += (vec2(vnoise(q * vec2(0.3, 0.5) + 3.1), vnoise(q * vec2(0.3, 0.5) + 7.7)) - 0.5) * vec2(1.4, 0.8);
   rib = ridgedN(q);
   float r2 = ridgedN(q * vec2(2.2, 1.7) + 5.2);
@@ -310,14 +310,28 @@ float spurWander(float y, int i) {
   return (vnoise(vec2(y * 45.0, float(i) * 7.3)) - 0.5) * 0.012;
 }
 
+// Spurs swell and fall back as they run down, so the crests jog and the
+// shadows they throw widen, narrow and break off rather than running straight
+// down the whole wall. Nothing changes at a spur's top. d: the slope down it.
+float spurSwell(float dy, int i, out float d) {
+  float fi = float(i);
+  float a = fi * 2.17 + 0.4;
+  float b = fi * 4.31 + 1.9;
+  float f1 = 24.0 + 9.0 * fract(fi * 0.618);
+  float f2 = 61.0 + 17.0 * fract(fi * 0.382);
+  d = 0.011 * (f1 * cos(dy * f1 + a) + 0.5 * f2 * cos(dy * f2 + b));
+  return 0.011 * (sin(dy * f1 + a) - sin(a) + 0.5 * (sin(dy * f2 + b) - sin(b)));
+}
+
 // How far the face stands toward us at (s, y).
 float spurZ(float s, float y) {
   float z = -9.0;
+  float d;
   for (int i = 0; i < 32; i++) {
     vec4 P = uSpur[i];
     if (P.y > 5.0) break;
     float dy = y - P.y;
-    z = max(z, P.w + SPUR_FWD * dy - SPUR_SIDE * abs(s - P.x - P.z * dy - spurWander(y, i)));
+    z = max(z, P.w + SPUR_FWD * dy + spurSwell(dy, i, d) - SPUR_SIDE * abs(s - P.x - P.z * dy - spurWander(y, i)));
   }
   return z;
 }
@@ -338,8 +352,9 @@ vec4 spurFace(float s, float y) {
     float dx = s - P.x - P.z * dy - spurWander(y, i);
     // Each spur's crest is rounded a little.
     float ad = sqrt(dx * dx + 4e-6);
-    float z = P.w + SPUR_FWD * dy - SPUR_SIDE * ad;
-    vec2 g = vec2(-SPUR_SIDE * dx / ad, SPUR_FWD + SPUR_SIDE * dx / ad * P.z);
+    float sw;
+    float z = P.w + SPUR_FWD * dy + spurSwell(dy, i, sw) - SPUR_SIDE * ad;
+    vec2 g = vec2(-SPUR_SIDE * dx / ad, SPUR_FWD + sw + SPUR_SIDE * dx / ad * P.z);
     if (z > z1) {
       z2 = z1;
       g2 = g1;
@@ -358,12 +373,14 @@ vec4 spurFace(float s, float y) {
 // Light left by the spurs standing between (s, y), on a face at depth z,
 // and the sun. crestRow: the layer's silhouette, above which nothing stands.
 float spurShadow(float s, float y, float z, int crestRow) {
+  // The edge of a shadow on jointed rock steps and frays, never ruled.
+  float fray = (vnoise(vec2(s * 300.0, y * 110.0)) + 0.5 * vnoise(vec2(s * 900.0, y * 500.0)) - 0.75) * 0.009;
   float sh = 1.0;
   for (int i = 1; i <= 4; i++) {
     float t = 0.006 * float(i * i);
     vec3 q = vec3(s + uSunDir.x * t, y - uSunDir.y * t, z + uSunDir.z * t);
     if (q.y < ridge(crestRow, q.x).x) break;
-    sh = min(sh, smoothstep(-0.002, 0.005, q.z - spurZ(q.x, q.y)));
+    sh = min(sh, smoothstep(-0.002, 0.005, q.z - spurZ(q.x, q.y) + fray));
   }
   return sh;
 }
@@ -477,7 +494,9 @@ vec3 rockLayerColor(float s, float y, float top, float cb, float sb, int row, fl
       slab = smoothstep(lip + 0.0015, lip - 0.0015, y) * smoothstep(uSlab.x - 0.006, uSlab.x + 0.002, s)
            * smoothstep(uSlab.y + 0.012, uSlab.y - 0.008, s);
       vec2 fg = mix(F.yz, vec2(-0.12, 2.0), slab);
-      nx = clamp(-fg.x * 0.6, -1.2, 1.2);
+      // Gently: hard-turned flanks would light and darken every spur alike,
+      // in stripes. The shadows they cast carry the big shapes instead.
+      nx = clamp(-fg.x * 0.42, -1.2, 1.2);
       ny = fg.y * 0.4;
       crease = F.w * (1.0 - slab);
       zFace = F.x;
@@ -499,9 +518,9 @@ vec3 rockLayerColor(float s, float y, float top, float cb, float sb, int row, fl
     // The Sella's walls are bedded: ledges run along them and catch the sky,
     // and a terrace of scree and snow parts the lower wall from the upper.
     float bed = row == 3 ? smoothstep(uSella.x, uSella.x + 0.03, s) * smoothstep(uSella.y, uSella.y - 0.03, s) : 0.0;
-    // How strongly the bedding shows: plainly on the Sella, faintly on the
-    // main massif, where its ledges dip gently west.
-    float bw = hero ? 0.45 * (1.0 - slab) : bed;
+    // How strongly the bedding shows: plainly on the Sella, less so on the
+    // main massif, where its ledges dip gently west and cross the spurs.
+    float bw = hero ? 0.75 * (1.0 - slab) : bed;
     float bedTone = 1.0;
     float ledge = 0.0;
     float joint = 0.0;
@@ -606,12 +625,12 @@ vec3 rockLayerColor(float s, float y, float top, float cb, float sb, int row, fl
     // Pale dolomite, cream to grey, with rust where blocks broke away. The
     // tones run down the wall, as the weather stains it.
     vec2 pt = p + vec2(tier * 3.7, 0.0);
-    float big = fbm3(vec2(pt.x * 9.0, pt.y * 1.2));
+    float big = fbm3(vec2(pt.x * 9.0, pt.y * 2.4));
     vec3 alb = mix(LIME, LIME_GREY, smoothstep(0.4, 0.85, big));
     float och = smoothstep(0.58, 0.8, fbm3(vec2(pt.x * 14.0 + 4.0, pt.y * 1.8)));
     alb = mix(alb, OCHRE, och * (0.45 - 0.25 * bed));
     // Dark streaks where water runs down, mostly in the gullies.
-    float st = smoothstep(0.62, 0.9, vnoise(vec2(pt.x * 260.0, pt.y * 4.0)))
+    float st = smoothstep(0.62, 0.9, vnoise(vec2(pt.x * 260.0, pt.y * 7.0)))
              * smoothstep(0.35, 0.6, vnoise(vec2(pt.x * 40.0, pt.y * 1.5) + 3.0));
     st *= (1.0 - 0.7 * smoothstep(0.3, 0.8, rib)) * smoothstep(0.05, 0.3, v) * (1.0 - slab);
     alb = mix(alb, STREAK, st * 0.5);
