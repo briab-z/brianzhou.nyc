@@ -96,6 +96,7 @@ const vec3 F_CREAM = vec3(0.96, 0.93, 0.87);
 const vec3 F_PINK = vec3(0.89, 0.63, 0.65);
 const vec3 F_VIOLET = vec3(0.66, 0.55, 0.77);
 const vec3 F_YELLOW = vec3(0.92, 0.78, 0.37);
+const vec3 F_BUTTERCUP = vec3(0.97, 0.82, 0.26);
 const vec3 HUT_WOOD = vec3(0.50, 0.33, 0.22);
 const vec3 HUT_ROOF = vec3(0.30, 0.24, 0.21);
 const vec3 HUT_STONE = vec3(0.72, 0.68, 0.62);
@@ -1390,17 +1391,33 @@ void layerNear(float s, float y, inout vec3 acc, inout float A) {
   vec3 N = normalize(vec3((hgt - 0.5) * 0.6, mix(1.0, 0.45, smoothstep(0.0, 0.12, d)), 0.6));
   vec3 c = shade(alb, N, mix(1.0, 0.7, smoothstep(0.0, 0.2, d)), 1.0 - 0.5 * cloudShadow(ss, yy));
 
-  vec2 cs = vec2(0.0045, 0.003);
+  // Flowers in drifts, buttercups most of all, with daisies, clover and
+  // bellflowers among them; nearer, they are bigger.
+  vec2 cs = vec2(0.0042, 0.0028);
   vec2 fi = floor(vec2(ss, yy) / cs);
-  float patchN = smoothstep(0.5, 0.72, vnoise(vec2(ss * 12.0, yy * 30.0)));
-  if (hash12(fi + 3.3) < 0.3 * patchN) {
+  float patchN = smoothstep(0.38, 0.62, vnoise(vec2(ss * 12.0, yy * 30.0)));
+  float drift = smoothstep(0.4, 0.62, vnoise(vec2(ss * 5.0, yy * 14.0) + 7.0));
+  float near = smoothstep(0.84, 1.0, yy);
+  vec3 lit = shade(vec3(1.0), vec3(0.0, 0.8, 0.6), 1.0, 1.0);
+  if (hash12(fi + 3.3) < 0.06 + 0.5 * patchN) {
     vec2 fpos = (fi + vec2(0.2 + 0.6 * hash12(fi + 7.1), 0.2 + 0.6 * hash12(fi + 9.7))) * cs;
-    float rad = 0.0008 * (0.7 + 1.3 * smoothstep(0.84, 1.0, yy));
+    float rad = 0.0013 * (0.75 + 0.5 * hash12(fi + 5.9)) * (0.8 + 1.6 * near);
     float dd = length((vec2(ss, yy) - fpos) * vec2(1.0, 1.3));
     float fa = clamp((rad - dd) / PX + 0.5, 0.0, 1.0);
     float pick = hash12(fi + 1.7);
-    vec3 fcol = pick < 0.35 ? F_CREAM : (pick < 0.6 ? F_PINK : (pick < 0.82 ? F_VIOLET : F_YELLOW));
-    c = mix(c, shade(fcol, vec3(0.0, 0.8, 0.6), 1.0, 1.0), fa * 0.85);
+    float py = mix(0.45, 0.9, drift);
+    float q = (pick - py) / (1.0 - py);
+    vec3 fcol = pick < py ? F_BUTTERCUP : (q < 0.4 ? F_CREAM : (q < 0.7 ? F_PINK : F_VIOLET));
+    c = mix(c, fcol * lit, fa * 0.9);
+  }
+  // A dusting of small buttercups through the drifts.
+  vec2 cs2 = cs * 0.5;
+  vec2 fj = floor(vec2(ss, yy) / cs2);
+  if (hash12(fj + 13.1) < 0.32 * drift * drift) {
+    vec2 fpos = (fj + vec2(0.2 + 0.6 * hash12(fj + 2.3), 0.2 + 0.6 * hash12(fj + 4.1))) * cs2;
+    float rad = 0.0008 * (0.8 + 1.4 * near);
+    float dd = length((vec2(ss, yy) - fpos) * vec2(1.0, 1.3));
+    c = mix(c, F_BUTTERCUP * lit, clamp((rad - dd) / PX + 0.5, 0.0, 1.0) * 0.85);
   }
   c += alb * uSunCol * exp(-d * 260.0) * 0.18;
   comp(acc, A, c, a);

@@ -20,7 +20,8 @@
   const SOIL = { back: '#8b7a52', hole: '#33281d', lip: '#6f5f40', lit: '#a8966a' };
   const SHEEP = { wool: '#ece5d6', under: '#b9ae9c', face: '#f3eee4', dark: '#2f2a26' };
   const GRASS = ['#b0b26a', '#98a35c', '#82924f', '#6c8046', '#566d3c', '#435a32', '#364b2a'];
-  const FLOWERS = ['#f5eddf', '#e3a0a6', '#a88cc4', '#eac75e', '#f2d7c9'];
+  // Buttercups first: most of the flowers in the grass are yellow.
+  const FLOWERS = ['#f4cf45', '#eac75e', '#f5eddf', '#e3a0a6', '#a88cc4', '#f2d7c9'];
 
   // The colours above are as they look by day. Under other light they are
   // scaled by how much light falls on open ground, as the shader does.
@@ -811,6 +812,10 @@
 
     /* Foreground grass ------------------------------------------------- */
 
+    function pickFlower() {
+      return Math.random() < 0.55 ? (Math.random() < 0.7 ? 0 : 1) : 2 + Math.floor(Math.random() * (FLOWERS.length - 2));
+    }
+
     function buildGrass() {
       grass = [];
       const n = Math.round(W / 2.4);
@@ -825,7 +830,7 @@
           lean: rand(-0.22, 0.22),
           bend: 0,
           tone: Math.min(GRASS.length - 1, Math.floor(row * GRASS.length)),
-          bloom: tall || Math.random() < 0.03 ? Math.floor(Math.random() * FLOWERS.length) : -1,
+          bloom: tall || Math.random() < 0.1 ? pickFlower() : -1,
         });
       }
       grass.sort((a, b) => a.row - b.row);
@@ -867,7 +872,7 @@
         if (g.bloom >= 0) {
           ctx.fillStyle = pal.flowers[g.bloom];
           ctx.beginPath();
-          ctx.arc(tx, ty, 1.6 + g.row * 1.4, 0, TAU);
+          ctx.arc(tx, ty, 1.8 + g.row * 1.6, 0, TAU);
           ctx.fill();
           ctx.fillStyle = current;
         }

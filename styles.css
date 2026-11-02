@@ -80,7 +80,13 @@ p {
 /* Scene */
 .scene {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* As tall as the viewport with the phone's toolbar hidden, so the scene
+     doesn't resize, and redraw, each time the toolbar slides in or out. */
+  height: 100vh;
+  height: 100lvh;
   z-index: 0;
   overflow: hidden;
 }

@@ -11,6 +11,9 @@
   const phone = window.matchMedia('(max-width: 720px)');
 
   const bgCanvas = document.getElementById('landscape');
+  // The scene is as tall as the largest viewport (see styles.css), so on a
+  // phone the toolbar sliding in and out as you scroll doesn't resize it.
+  const sceneEl = document.querySelector('.scene');
   const fgCanvas = document.getElementById('life');
   const themeMeta = document.querySelector('meta[name="theme-color"]');
 
@@ -65,8 +68,8 @@
   // text and the lake and meadow stay in view. The massif goes right of the
   // text on wide screens.
   function layout() {
-    const W = window.innerWidth;
-    const H = window.innerHeight;
+    const W = sceneEl.clientWidth || window.innerWidth;
+    const H = sceneEl.clientHeight || window.innerHeight;
     // A hidden or collapsed window has no size yet; wait for the resize.
     if (!W || !H) return;
     view.W = W;
@@ -216,15 +219,30 @@
     });
   }
 
+  // Resizing a canvas clears it. Lay out again at the start of the next
+  // frame, so the scene is redrawn before that frame is shown; a cleared
+  // canvas on screen flashes the page behind it.
+  let relayout = false;
   let resizeTimer = 0;
   window.addEventListener('resize', () => {
+    if (sceneEl.clientWidth === view.W && sceneEl.clientHeight === view.H) return;
+    if (!reduceMotion.matches) {
+      relayout = true;
+      return;
+    }
     cancelAnimationFrame(resizeTimer);
     resizeTimer = requestAnimationFrame(() => {
       layout();
       if (land && light) land.setLight(light, moon);
-      if (reduceMotion.matches) drawStill();
+      drawStill();
     });
   });
+
+  // Frames stall while a phone scrolls the page, whatever the GPU is doing.
+  let lastScroll = -Infinity;
+  window.addEventListener('scroll', () => {
+    lastScroll = performance.now();
+  }, { passive: true });
 
   // Fish rising now and then.
   let nextFish = 44;
@@ -257,13 +275,14 @@
   }
 
   let slowFrames = 0;
-  function adapt(dt) {
+  function adapt(dt, now) {
+    if (now - lastScroll < 500) return;
     if (dt > 0.024) slowFrames++;
     else slowFrames = Math.max(0, slowFrames - 1);
     if (slowFrames > 40 && renderScale > 0.75) {
       renderScale = Math.max(0.75, renderScale - 0.2);
       slowFrames = 0;
-      if (land) land.resize(view.W, view.H, renderScale);
+      relayout = true;
     }
   }
 
@@ -288,6 +307,12 @@
     view.parX += (tx - view.parX) * k;
     view.parY += (ty - view.parY) * k;
 
+    if (relayout) {
+      relayout = false;
+      layout();
+      if (land && light) land.setLight(light, moon);
+    }
+
     ambientRipples(clock);
     if (land) land.render(clock, view, ripples);
     if (life) {
@@ -298,7 +323,7 @@
       firstFrame = false;
       bgCanvas.classList.add('ready');
     } else {
-      adapt(dt);
+      adapt(dt, now);
     }
   }
 
