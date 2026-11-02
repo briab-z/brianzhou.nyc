@@ -228,7 +228,8 @@
       e.vx = dt > 0 ? (nx - e.x) / dt : 0;
       e.x = nx;
       e.y = ny;
-      e.depth = Math.sin(e.ang);
+      // We look up at the circle from far off, so its far side sits lower.
+      e.depth = -Math.sin(e.ang);
     }
 
     function drawBat(b, k) {
@@ -272,24 +273,36 @@
       ctx.restore();
     }
 
-    // A golden eagle soaring, seen from below: broad wings held in a shallow
-    // V, long fingered primaries, a fanned tail and the head jutting ahead.
+    // A golden eagle soaring: broad wings held in a shallow V, long fingered
+    // primaries, a fanned tail and the head jutting ahead. It is drawn flat in
+    // its own plane, then laid back into the sky as if seen from far below at
+    // a low angle: the wings stay spread across the view, the body is
+    // foreshortened and swings toward wherever the eagle is heading.
     function drawEagle(k) {
       const e = eagle;
       const persp = 1 + e.depth * 0.08;
       const s = 17 * k * persp;
       const f = e.flapping > 0 ? Math.sin(e.phase) * Math.min(1, e.flapping) : 0;
-      const bank = clamp(-Math.cos(e.ang) * 0.22, -0.25, 0.25);
       // Dihedral: how far the wing rises per unit out from the body.
       const lift = 0.12 + f * 0.5;
       const fold = 1 - 0.25 * Math.max(0, -f);
+      // Heading along the orbit: fx across the screen, fz away from us.
+      const [fx, fz] = [-Math.sin(e.ang), Math.cos(e.ang)];
+      // The wings look a little shorter side on, and the one toward the
+      // centre of the circle dips as it banks.
+      const span = 0.75 + 0.25 * Math.abs(fz);
+      const bank = -(0.15 + e.alarm * 0.15) * fz;
+      // Bird plane (across, back) to screen, with `rise` lifting the wing.
+      const base = ctx.getTransform();
+      const frame = (rise) => {
+        ctx.setTransform(base);
+        ctx.translate(e.x, e.y);
+        ctx.transform(span, bank - rise, -fx * 0.55, 0.36, 0, 0);
+      };
       ctx.save();
-      ctx.translate(e.x, e.y);
-      ctx.rotate(bank);
       for (const side of [-1, 1]) {
-        // The wing turned toward us in a bank looks a little longer.
-        const span = s * (1 + side * bank * 0.5);
-        const P = (x, y) => [side * x * span, (y - lift * x) * s];
+        frame(side * lift);
+        const P = (x, y) => [side * x * s, y * s];
         ctx.fillStyle = EAGLE.flight;
         ctx.beginPath();
         ctx.moveTo(...P(0.05, -0.06));
@@ -325,6 +338,7 @@
         ctx.fill();
       }
       // Tail, fanned and rounded.
+      frame(0);
       ctx.fillStyle = EAGLE.flight;
       ctx.beginPath();
       ctx.moveTo(-0.055 * s, 0.14 * s);
